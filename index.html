@@ -215,6 +215,12 @@
             border-radius: 8px;
             width: 100%;
         }
+        .loading {
+            text-align: center;
+            color: #6C8A93;
+            margin: 50px;
+            font-size: 1.2em;
+        }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -237,11 +243,12 @@
 </head>
 <body>
     <div id="offline-indicator" class="offline-indicator">Offline</div>
-    <header>
+    <div class="loading" id="loading">Cargando datos...</div>
+    <header style="display: none;" id="header">
         <div class="logo">Vale & Berna</div>
         <button class="admin-icon" onclick="openAdminModal()">⚙️</button>
     </header>
-    <main>
+    <main style="display: none;" id="main">
         <div class="search-container">
             <p class="welcome">Buscá tu mesa 💍</p>
             <div class="search-box">
@@ -267,26 +274,65 @@
                 <button class="button" id="add-guest-btn">Agregar Invitado</button>
                 <input type="file" id="csv-import" accept=".csv">
                 <button class="button" onclick="importCSV()">Importar CSV</button>
-                <button class="button" onclick="saveChanges()">Guardar Cambios</button>
             </div>
         </div>
     </div>
 
-    <script>
-        let invitados = JSON.parse(localStorage.getItem('invitados')) || [
-    { nombre: "Juan Pérez", mesa: "Mesa 7 – Flores Blancas" },
-    { nombre: "María García", mesa: "Mesa 3 – Hojas Verdes" }
-];
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, set, onValue, push, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAOoEG9vNmN4czNNTkruMGe5Hyf9P-XWnM",
+            authDomain: "mesas-vale-berna.firebaseapp.com",
+            databaseURL: "https://mesas-vale-berna-default-rtdb.firebaseio.com",
+            projectId: "mesas-vale-berna",
+            storageBucket: "mesas-vale-berna.firebasestorage.app",
+            messagingSenderId: "181611792555",
+            appId: "1:181611792555:web:91bfcce418fa2133b7cfee"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        const invitadosRef = ref(database, 'invitados');
+
+        let invitados = [];
         let isOnline = navigator.onLine;
 
-        function saveToStorage() {
-            localStorage.setItem('invitados', JSON.stringify(invitados));
+        // Escuchar cambios en Firebase
+        onValue(invitadosRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                invitados = Object.keys(data).map(key => ({
+                    id: key,
+                    nombre: data[key].nombre,
+                    mesa: data[key].mesa
+                }));
+            } else {
+                invitados = [];
+            }
             updateCounter();
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('header').style.display = 'block';
+            document.getElementById('main').style.display = 'block';
+        });
+
+        function saveToFirebase() {
+            const invitadosObj = {};
+            invitados.forEach(inv => {
+                if (inv.id) {
+                    invitadosObj[inv.id] = { nombre: inv.nombre, mesa: inv.mesa };
+                }
+            });
+            set(invitadosRef, invitadosObj);
         }
 
-        function updateCounter() {
+        window.updateCounter = function() {
             const counter = document.getElementById('guest-counter');
-            if (counter) counter.textContent = `Invitados: ${invitados.length}/140`;
+            if (counter) {
+                counter.textContent = `Invitados: ${invitados.length}/140`;
+            }
         }
 
         function checkOnlineStatus() {
@@ -298,7 +344,7 @@
         window.addEventListener('offline', checkOnlineStatus);
         checkOnlineStatus();
 
-        function searchTable() {
+        window.searchTable = function() {
             const name = document.getElementById('name-input').value.trim();
             if (!name) {
                 alert('Por favor, escribí un nombre.');
@@ -326,18 +372,18 @@
             }
         }
 
-        function openAdminModal() {
+        window.openAdminModal = function() {
             document.getElementById('admin-modal').style.display = 'flex';
             updateCounter();
         }
 
-        function closeAdminModal() {
+        window.closeAdminModal = function() {
             document.getElementById('admin-modal').style.display = 'none';
             document.getElementById('admin-panel').style.display = 'none';
             document.getElementById('code-input').value = '';
         }
 
-        function verifyCode() {
+        window.verifyCode = function() {
             const code = document.getElementById('code-input').value;
             if (code === '6803') {
                 document.getElementById('admin-panel').style.display = 'block';
@@ -357,26 +403,25 @@
                 const nameInput = document.createElement('input');
                 nameInput.type = 'text';
                 nameInput.value = inv.nombre;
-                nameInput.addEventListener('input', (e) => {
-                    invitados[index].nombre = e.target.value;
-                    saveToStorage();
+                nameInput.addEventListener('blur', () => {
+                    invitados[index].nombre = nameInput.value;
+                    saveToFirebase();
                 });
                 
                 const mesaInput = document.createElement('input');
                 mesaInput.type = 'text';
                 mesaInput.value = inv.mesa;
-                mesaInput.addEventListener('input', (e) => {
-                    invitados[index].mesa = e.target.value;
-                    saveToStorage();
+                mesaInput.addEventListener('blur', () => {
+                    invitados[index].mesa = mesaInput.value;
+                    saveToFirebase();
                 });
                 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete';
                 deleteBtn.textContent = 'Eliminar';
                 deleteBtn.addEventListener('click', () => {
-                    invitados.splice(index, 1);
-                    saveToStorage();
-                    renderGuestList();
+                    const invitadoRef = ref(database, `invitados/${inv.id}`);
+                    remove(invitadoRef);
                 });
                 
                 li.appendChild(nameInput);
@@ -386,18 +431,17 @@
             });
         }
 
-        function addGuest() {
+        window.addGuest = function() {
             if (invitados.length >= 140) {
                 alert('Máximo 140 invitados alcanzado.');
                 return;
             }
-            invitados.push({ nombre: 'Nuevo Invitado', mesa: 'Mesa X' });
-            saveToStorage();
-            renderGuestList();
+            const newInvitadoRef = push(invitadosRef);
+            set(newInvitadoRef, { nombre: 'Nuevo Invitado', mesa: 'Mesa X' });
             alert('Invitado agregado.');
         }
 
-        function importCSV() {
+        window.importCSV = function() {
             const file = document.getElementById('csv-import').files[0];
             if (!file) {
                 alert('Por favor, seleccioná un archivo CSV.');
@@ -419,19 +463,18 @@
                     alert('Importar este CSV excedería el límite de 140 invitados.');
                     return;
                 }
-                invitados = [...invitados, ...newInvitados];
-                saveToStorage();
-                renderGuestList();
+                
+                newInvitados.forEach(inv => {
+                    const newRef = push(invitadosRef);
+                    set(newRef, inv);
+                });
+                
                 alert(`${newInvitados.length} invitados importados.`);
             };
             reader.readAsText(file);
         }
 
-        function saveChanges() {
-            saveToStorage();
-            alert('Cambios guardados exitosamente.');
-        }
-
+        // Autocompletado
         const nameInput = document.getElementById('name-input');
         const suggestionsDiv = document.getElementById('suggestions');
 
@@ -482,15 +525,11 @@
             suggestionsDiv.style.display = 'none';
         }
 
+        // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            updateCounter();
             const addBtn = document.getElementById('add-guest-btn');
-            if (addBtn) addBtn.addEventListener('click', addGuest);
-            
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('SW registrado'))
-                    .catch(err => console.log('Error en SW:', err));
+            if (addBtn) {
+                addBtn.addEventListener('click', window.addGuest);
             }
         });
     </script>
