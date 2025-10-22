@@ -132,6 +132,10 @@
             margin-top: 10px;
         }
         .button:hover { background-color: #739E82; }
+        .button:disabled {
+            background-color: #D3D3D3;
+            cursor: not-allowed;
+        }
         .result-card {
             background-color: #FFFFFF;
             border-radius: 16px;
@@ -221,6 +225,15 @@
             margin: 50px;
             font-size: 1.2em;
         }
+        .success-message {
+            background-color: #A6BCA5;
+            color: #FFFFFF;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -270,6 +283,7 @@
             <div id="admin-panel" style="display: none;">
                 <p class="counter" id="guest-counter">Invitados: 0/140</p>
                 <h3>Lista de Invitados</h3>
+                <div class="success-message" id="success-message">Cambios guardados automáticamente ✓</div>
                 <ul id="guest-list" class="guest-list"></ul>
                 <button class="button" id="add-guest-btn">Agregar Invitado</button>
                 <input type="file" id="csv-import" accept=".csv">
@@ -281,7 +295,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, onValue, push, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        import { getDatabase, ref, set, onValue, push, remove, update } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyAOoEG9vNmN4czNNTkruMGe5Hyf9P-XWnM",
@@ -300,7 +314,7 @@
         let invitados = [];
         let isOnline = navigator.onLine;
 
-        // Escuchar cambios en Firebase
+        // Escuchar cambios en Firebase (sincronización en tiempo real)
         onValue(invitadosRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -313,19 +327,18 @@
                 invitados = [];
             }
             updateCounter();
+            renderGuestList();
             document.getElementById('loading').style.display = 'none';
             document.getElementById('header').style.display = 'block';
             document.getElementById('main').style.display = 'block';
         });
 
-        function saveToFirebase() {
-            const invitadosObj = {};
-            invitados.forEach(inv => {
-                if (inv.id) {
-                    invitadosObj[inv.id] = { nombre: inv.nombre, mesa: inv.mesa };
-                }
-            });
-            set(invitadosRef, invitadosObj);
+        function showSuccessMessage() {
+            const msg = document.getElementById('success-message');
+            msg.style.display = 'block';
+            setTimeout(() => {
+                msg.style.display = 'none';
+            }, 2000);
         }
 
         window.updateCounter = function() {
@@ -375,6 +388,7 @@
         window.openAdminModal = function() {
             document.getElementById('admin-modal').style.display = 'flex';
             updateCounter();
+            renderGuestList();
         }
 
         window.closeAdminModal = function() {
@@ -395,33 +409,41 @@
 
         function renderGuestList() {
             const list = document.getElementById('guest-list');
+            if (!list) return;
+            
             list.innerHTML = '';
-            invitados.forEach((inv, index) => {
+            invitados.forEach((inv) => {
                 const li = document.createElement('li');
                 li.className = 'guest-item';
                 
                 const nameInput = document.createElement('input');
                 nameInput.type = 'text';
                 nameInput.value = inv.nombre;
+                nameInput.placeholder = 'Nombre completo';
                 nameInput.addEventListener('blur', () => {
-                    invitados[index].nombre = nameInput.value;
-                    saveToFirebase();
+                    const invitadoRef = ref(database, `invitados/${inv.id}`);
+                    update(invitadoRef, { nombre: nameInput.value });
+                    showSuccessMessage();
                 });
                 
                 const mesaInput = document.createElement('input');
                 mesaInput.type = 'text';
                 mesaInput.value = inv.mesa;
+                mesaInput.placeholder = 'Mesa asignada';
                 mesaInput.addEventListener('blur', () => {
-                    invitados[index].mesa = mesaInput.value;
-                    saveToFirebase();
+                    const invitadoRef = ref(database, `invitados/${inv.id}`);
+                    update(invitadoRef, { mesa: mesaInput.value });
+                    showSuccessMessage();
                 });
                 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete';
                 deleteBtn.textContent = 'Eliminar';
                 deleteBtn.addEventListener('click', () => {
-                    const invitadoRef = ref(database, `invitados/${inv.id}`);
-                    remove(invitadoRef);
+                    if (confirm(`¿Eliminar a ${inv.nombre}?`)) {
+                        const invitadoRef = ref(database, `invitados/${inv.id}`);
+                        remove(invitadoRef);
+                    }
                 });
                 
                 li.appendChild(nameInput);
@@ -437,8 +459,13 @@
                 return;
             }
             const newInvitadoRef = push(invitadosRef);
-            set(newInvitadoRef, { nombre: 'Nuevo Invitado', mesa: 'Mesa X' });
-            alert('Invitado agregado.');
+            set(newInvitadoRef, { 
+                nombre: 'Nuevo Invitado', 
+                mesa: 'Mesa X' 
+            }).then(() => {
+                // La lista se actualiza automáticamente por onValue
+                // No necesitamos renderizar manualmente
+            });
         }
 
         window.importCSV = function() {
@@ -464,12 +491,14 @@
                     return;
                 }
                 
+                let added = 0;
                 newInvitados.forEach(inv => {
                     const newRef = push(invitadosRef);
                     set(newRef, inv);
+                    added++;
                 });
                 
-                alert(`${newInvitados.length} invitados importados.`);
+                alert(`${added} invitados importados exitosamente.`);
             };
             reader.readAsText(file);
         }
