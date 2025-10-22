@@ -1,10 +1,10 @@
-const CACHE_NAME = 'mesas-vb-v1';
+const CACHE_NAME = 'mesas-vb-v2';
 const urlsToCache = [
-    '/',
-    '/index.html',
-    '/manifest.json',
-    '/icon-192.png',
-    '/icon-512.png'
+    '/mesas-vale-berna/',
+    '/mesas-vale-berna/index.html',
+    '/mesas-vale-berna/manifest.json',
+    '/mesas-vale-berna/icon-192.png',
+    '/mesas-vale-berna/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -17,10 +17,4 @@ self.addEventListener('fetch', event => {
     event.respondWith(
         caches.match(event.request).then(response => response || fetch(event.request))
     );
-});
-
-self.addEventListener('message', event => {
-    if (event.data && event.data.type === 'UPDATE_DATA') {
-        console.log('Datos actualizados');
-    }
 });
