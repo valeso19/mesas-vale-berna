@@ -132,10 +132,6 @@
             margin-top: 10px;
         }
         .button:hover { background-color: #739E82; }
-        .button:disabled {
-            background-color: #D3D3D3;
-            cursor: not-allowed;
-        }
         .result-card {
             background-color: #FFFFFF;
             border-radius: 16px;
@@ -288,6 +284,7 @@
                 <button class="button" id="add-guest-btn">Agregar Invitado</button>
                 <input type="file" id="csv-import" accept=".csv">
                 <button class="button" onclick="importCSV()">Importar CSV</button>
+                <button class="button" onclick="saveAllChanges()">Guardar Cambios</button>
             </div>
         </div>
     </div>
@@ -312,9 +309,9 @@
         const invitadosRef = ref(database, 'invitados');
 
         let invitados = [];
+        let pendingChanges = {};
         let isOnline = navigator.onLine;
 
-        // Escuchar cambios en Firebase (sincronización en tiempo real)
         onValue(invitadosRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -420,20 +417,30 @@
                 nameInput.type = 'text';
                 nameInput.value = inv.nombre;
                 nameInput.placeholder = 'Nombre completo';
+                nameInput.addEventListener('input', () => {
+                    pendingChanges[inv.id] = {
+                        ...pendingChanges[inv.id],
+                        nombre: nameInput.value
+                    };
+                });
                 nameInput.addEventListener('blur', () => {
                     const invitadoRef = ref(database, `invitados/${inv.id}`);
                     update(invitadoRef, { nombre: nameInput.value });
-                    showSuccessMessage();
                 });
                 
                 const mesaInput = document.createElement('input');
                 mesaInput.type = 'text';
                 mesaInput.value = inv.mesa;
                 mesaInput.placeholder = 'Mesa asignada';
+                mesaInput.addEventListener('input', () => {
+                    pendingChanges[inv.id] = {
+                        ...pendingChanges[inv.id],
+                        mesa: mesaInput.value
+                    };
+                });
                 mesaInput.addEventListener('blur', () => {
                     const invitadoRef = ref(database, `invitados/${inv.id}`);
                     update(invitadoRef, { mesa: mesaInput.value });
-                    showSuccessMessage();
                 });
                 
                 const deleteBtn = document.createElement('button');
@@ -462,10 +469,23 @@
             set(newInvitadoRef, { 
                 nombre: 'Nuevo Invitado', 
                 mesa: 'Mesa X' 
-            }).then(() => {
-                // La lista se actualiza automáticamente por onValue
-                // No necesitamos renderizar manualmente
             });
+        }
+
+        window.saveAllChanges = function() {
+            if (Object.keys(pendingChanges).length === 0) {
+                alert('No hay cambios pendientes.');
+                return;
+            }
+            
+            Object.keys(pendingChanges).forEach(id => {
+                const invitadoRef = ref(database, `invitados/${id}`);
+                update(invitadoRef, pendingChanges[id]);
+            });
+            
+            pendingChanges = {};
+            showSuccessMessage();
+            alert('Todos los cambios guardados exitosamente.');
         }
 
         window.importCSV = function() {
@@ -554,7 +574,6 @@
             suggestionsDiv.style.display = 'none';
         }
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             const addBtn = document.getElementById('add-guest-btn');
             if (addBtn) {
@@ -563,4 +582,4 @@
         });
     </script>
 </body>
-</html>
+    </html>
