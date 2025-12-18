@@ -18,7 +18,7 @@
   
   <div id="loading">Cargando datos...</div>
 
-  <!-- ENVOLVER el input password en un form para evitar warning -->
+  <!-- Input password dentro de form para eliminar warning -->
   <form id="verification-form">
     <input type="password" id="code-input" placeholder="Código de verificación" />
   </form>
@@ -39,6 +39,7 @@
 
     const app = initializeApp(firebaseConfig);
     const database = getDatabase(app);
+
     const invitadosRef = ref(database, 'invitados');
 
     onValue(invitadosRef,
@@ -47,8 +48,7 @@
         console.log('Datos recibidos de Firebase:', data);
 
         if (data) {
-          // Aquí va el código que procesa y muestra los datos de invitados
-          console.log("Procesando datos de invitados...");
+          // Aquí puede ir el código original para procesar los datos
           const header = document.getElementById('header');
           const main = document.getElementById('main');
           const loading = document.getElementById('loading');
@@ -57,6 +57,8 @@
           if (main) main.style.display = 'block';
         } else {
           console.warn('No se encontraron datos en la base de datos.');
+          const loading = document.getElementById('loading');
+          if (loading) loading.textContent = "No hay datos disponibles.";
         }
       },
       (error) => {
